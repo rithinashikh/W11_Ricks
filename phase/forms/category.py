@@ -14,6 +14,6 @@ class CategoryForm(forms.ModelForm):
         labels={
             'name':'Category Name',
             'offer_active': 'Offer Active',
-            'discount': 'Discount',
+            'discount': 'Discount Price',
         }
 

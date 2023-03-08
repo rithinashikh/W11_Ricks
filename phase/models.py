@@ -20,14 +20,11 @@ class Category(models.Model):
 
 class Product(models.Model):
     name = models.CharField(max_length=50)
-    # price = models.IntegerField(default=0)
     description = models.CharField(max_length=200)
     image = models.ImageField(upload_to='imagestore/')
     stock = models.PositiveIntegerField(default=1)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, default='Wired')
     normalprice = models.IntegerField(default=0)
-    # offerprice = models.IntegerField(default=0)
-    # couponprice = models.IntegerField(default=0)
     def __str__(self):
         return self.name
     

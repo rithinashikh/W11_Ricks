@@ -1,6 +1,8 @@
 from django import forms
 from phase.models import Product, Coupon, Banner
 from django.forms import ModelForm
+import re
+from django.core.exceptions import ValidationError
 
 class ProductForm(forms.ModelForm):
     class Meta:
@@ -9,8 +11,7 @@ class ProductForm(forms.ModelForm):
         widgets = {
             'name' : forms.TextInput(attrs={'class':'form-control'}),
             'normalprice' : forms.TextInput(attrs={'class':'form-control'}),
-            'description' : forms.Textarea(attrs={'class':'form-control','rows': 4}),
-            
+            'description' : forms.Textarea(attrs={'class':'form-control','rows': 4}),         
             'stock': forms.NumberInput(attrs={'class': 'form-control'}),
             'category' : forms.Select(attrs={'class':'form-control'}),
 
@@ -19,10 +20,20 @@ class ProductForm(forms.ModelForm):
             'name':'Product Name',
             'normalprice':'Price',
             'description':'Description',
-            # 'image':'Image',
             'stock':'Stock',
             'category':'Category'
         }
+    def clean_normalprice(self):
+        normalprice = self.cleaned_data['normalprice']
+        if not re.match(r'^\d+(\.\d{1,2})?$', str(normalprice)):
+            raise ValidationError("Price must be a number with up to 2 decimal places.")
+        return normalprice
+
+    def clean_stock(self):
+        stock = self.cleaned_data['stock']
+        if stock < 0:
+            raise ValidationError("Stock must be a non-negative integer.")
+        return stock
 
 
 class CouponForm(forms.ModelForm):

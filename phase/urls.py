@@ -1,30 +1,32 @@
 from django.urls import path
 from . import views
+from .views import UserLoginView, UserSignupView, AdminLoginView, AdminAddProductView, AdminAddCategoryView
+from .views import UpdateCategoryView,UserOTPLoginView, OrderUpdateView, EditUserProfileView, ChangePasswordView
 
 urlpatterns = [
 
     path('', views.index, name='index'),
     path('contact/', views.contact, name='contact'),
     path('about/', views.about, name='about'),
-    path('userlogin/', views.userlogin, name='userlogin'),
+    path('userlogin/', UserLoginView.as_view(), name='userlogin'),
     path('shop/', views.shop, name='shop'),
     path('userlogout/', views.userlogout, name='userlogout'),
-    path('usersignup/', views.usersignup, name='usersignup'),
-    path('adminlogin/', views.adminlogin, name='adminlogin'),
+    path('usersignup/', UserSignupView.as_view(), name='usersignup'),
+    path('adminlogin/', AdminLoginView.as_view(), name='adminlogin'),
     path('admindashboard/', views.admindashboard, name='admindashboard'),
     path('adminuserlist/', views.adminuserlist, name='adminuserlist'),
     path('adminproductlist/', views.adminproductlist, name='adminproductlist'),
-    path('adminaddproduct/', views.adminaddproduct, name='adminaddproduct'),
+    path('adminaddproduct/', AdminAddProductView.as_view(), name='adminaddproduct'),
     path('updateproduct/', views.updateproduct, name='updateproduct'),
     path('adminlogout/', views.adminlogout, name='adminlogout'),
     path('userblock/', views.userblock, name='userblock'),
     path('deleteproduct/', views.deleteproduct, name='deleteproduct'),
-    path('adminaddcategory/', views.adminaddcategory, name='adminaddcategory'),
+    path('adminaddcategory/', AdminAddCategoryView.as_view(), name='adminaddcategory'),
     path('shopsingle/', views.shopsingle, name='shopsingle'),
     path('updateproduct/<int:id>', views.updateproduct, name='updateproduct'),
     path('admincategorylist/', views.admincategorylist, name='admincategorylist'),
     path('deletecategory/', views.deletecategory, name='deletecategory'),
-    path('updatecategory/', views.updatecategory, name='updatecategory'),
+    path('updatecategory/', UpdateCategoryView.as_view(), name='updatecategory'),
     path('addtocart/', views.addtocart, name='addtocart'),
     path('cart/', views.cart, name='cart'),
     path('otplogin/', views.otplogin, name='otplogin'),
@@ -40,12 +42,12 @@ urlpatterns = [
     path('cancelorder/<int:id>', views.cancelorder, name='cancelorder'),
     path('returnorder/<int:id>', views.returnorder, name='returnorder'),
     path('adminorderlist/', views.adminorderlist, name='adminorderlist'),
-    path('updateorder/<int:id>', views.updateorder, name='updateorder'),
+    path('updateorder/<int:id>', OrderUpdateView.as_view(), name='updateorder'),
     path('paypal/', views.paypal, name='paypal'),
     path('userprofile/', views.userprofile, name='userprofile'),
-    path('edituserprofile/', views.edituserprofile, name='edituserprofile'),
-    path('changepassword/', views.changepassword, name='changepassword'),
-    path('userotplogin/', views.userotplogin, name='userotplogin'),
+    path('edituserprofile/', EditUserProfileView.as_view(), name='edituserprofile'),
+    path('changepassword/', ChangePasswordView.as_view(), name='changepassword'),
+    path('userotplogin/', UserOTPLoginView.as_view(), name='userotplogin'),
     path('updateprofileaddress/<int:id>', views.updateprofileaddress, name='updateprofileaddress'),
     path('addprofileaddress/', views.addprofileaddress, name='addprofileaddress'),
     path('wishlist/', views.wishlist, name='wishlist'),
@@ -59,5 +61,5 @@ urlpatterns = [
     path('generateinvoice/', views.generateinvoice, name='generateinvoice'),
     path('updatebanner/', views.updatebanner, name='updatebanner'),
     path('adminbannerlist/', views.adminbannerlist, name='adminbannerlist'),
-
+    # path('download/', views.download, name='download'),
 ]

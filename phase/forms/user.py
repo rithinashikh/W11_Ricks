@@ -1,6 +1,8 @@
 from django import forms
 from phase.models import UserDetail, Address, Order
 from django.forms import ModelForm
+import re
+from django.core.exceptions import ValidationError
 
 class UserSignupForm(forms.ModelForm):
     class Meta:
@@ -20,10 +22,37 @@ class UserSignupForm(forms.ModelForm):
             'upassword':'Password',
             'uimage':'Image',
         }
+    def clean_uphone(self):
+        uphone = self.cleaned_data['uphone']
+        if UserDetail.objects.filter(uphone=uphone).exists():
+            raise ValidationError("This Phone number already exists.")
+        if not re.match(r'^\d{10}$', uphone):
+            raise ValidationError("Phone number must be 10 digit")
+        return uphone
+    def clean_uname(self):
+        uname = self.cleaned_data['uname']
+        if UserDetail.objects.filter(uname=uname).exists():
+            raise ValidationError("This user already exists.")
+        if not re.match(r'^[A-Za-z]{4,8}$', uname):
+            raise ValidationError("Length of username must be between 4 to 8")
+        return uname
 
-# class UserProfileForm(UserSignupForm):
-#     class Meta(UserSignupForm.Meta):
-#         exclude = ['uname','upassword'] 
+    def clean_uemail(self):
+        uemail = self.cleaned_data['uemail']
+        if UserDetail.objects.filter(uemail=uemail).exists():
+            raise ValidationError("This email is already registered.")
+        # if not re.match(r'^[A-Za-z]{2,4}$+@[A-Za-z]{2,4}+.[A-Za-z]{2,4}$', uemail):
+        #     raise ValidationError("Invalid email address")
+        return uemail
+    
+    def clean_upassword(self):
+        upassword = self.cleaned_data['upassword']
+        if not re.match(r'^[A-Za-z]{4,8}$', upassword):
+            raise ValidationError("Length of password must be between 4 to 8")
+        return upassword
+
+
+
 
 class UserLoginForm(forms.ModelForm):
     class Meta:
@@ -61,6 +90,18 @@ class UserAddressForm(forms.ModelForm):
             'zipcode':'Zipcode',
             'phone':'Phone',
         }
+    def clean_phone(self):
+        phone = self.cleaned_data['phone']
+        if not re.match(r'^\d{10}$', phone):
+            raise ValidationError("Phone number must be entered in the format: '9999999999'")
+        return phone
+
+    def clean_zipcode(self):
+        zipcode = self.cleaned_data['zipcode']
+        if not re.match(r'^\d{6}$', str(zipcode)):
+            raise ValidationError("Zip code must be 6 digits.")
+        return zipcode
+
 
         
 class OrderForm(forms.ModelForm):

@@ -21,9 +21,13 @@ from reportlab.platypus import TableStyle,Table
 from reportlab.lib import colors
 from datetime import datetime, time, timedelta
 from django.http import FileResponse
-
-
-
+from django.views import View
+from django.contrib.auth import authenticate, login
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from xhtml2pdf import pisa
+import os 
+import datetime
 
 def index(request):
     obj = Banner.objects.all()
@@ -35,43 +39,46 @@ def contact(request):
 def about(request):
     return render(request, 'about.html')
 
-def userlogin(request):
-    if 'uname' in request.session:
-        return redirect('shop')
-    else:        
-        if request.method=='POST':
-            uname = request.POST.get('uname')
-            password = request.POST.get('upassword')
-            customer = UserDetail.objects.filter(uname=uname).first()
-            if customer.upassword==password:
-                if customer.uactive:
-                    request.session['uname']=uname
-                    return redirect('shop')
-            else:
-                return redirect('userlogin')
-        fm = UserLoginForm()
-        return render(request, 'userlogin.html',{'fm':fm})
-
-
-def usersignup(request):
-    if 'uname' in request.session:
-        return redirect('shop')
-    else:
-        if request.method=='POST':
-            fm = UserSignupForm(request.POST, request.FILES)
-            if fm.is_valid():
-                c_password = request.POST.get('c_password2')
-                password = request.POST.get('upassword')
-                if c_password==password:
-                    fm.save()
-                    return redirect('userlogin') 
-                else:
-                    messages.warning(request,"Passwords are not matching")
-                    return redirect('usersignup') 
-            else:
-                return redirect('usersignup')
+class UserLoginView(View):
+    def get(self, request):
+        if 'uname' in request.session:
+            return redirect('shop')
+        else:
+            fm = UserLoginForm()
+            return render(request, 'userlogin.html', {'fm': fm})
+    
+    def post(self, request):
+        uname = request.POST.get('uname')
+        password = request.POST.get('upassword')
+        customer = UserDetail.objects.filter(uname=uname).first()
+        if customer and customer.upassword == password and customer.uactive:
+            request.session['uname'] = uname
+            return redirect('shop')
+        else:
+            return redirect('userlogin')
+        
+class UserSignupView(View):
+    def get(self, request):
+        if 'uname' in request.session:
+            return redirect('shop')
         fm = UserSignupForm()
-        return render (request, 'usersignup.html',{'fm':fm})
+        return render(request, 'usersignup.html', {'fm': fm})
+    
+    def post(self, request):
+        if 'uname' in request.session:
+            return redirect('shop')
+        fm = UserSignupForm(request.POST, request.FILES)
+        if fm.is_valid():
+            c_password = request.POST.get('c_password2')
+            password = request.POST.get('upassword')
+            if c_password == password:
+                fm.save()
+                return redirect('userlogin') 
+            else:
+                messages.warning(request, "Passwords are not matching")
+                return redirect('usersignup') 
+        else:
+            return render(request, 'usersignup.html', {'fm': fm})
 
 
 
@@ -80,16 +87,12 @@ def shop(request):
         cat=Category.objects.all()
         cat_id = request.GET.get('cat_id')
         if cat_id is not None:
-            details3=Product.objects.filter(category__id=cat_id)
-            paginator = Paginator(details3, 3)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
-            
+            details3=Product.objects.filter(category__id=cat_id)          
         else:
             details3=Product.objects.all()
-            paginator = Paginator(details3, 3)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
+        paginator = Paginator(details3, 3)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
         return render(request, 'shop.html', {'page_obj': page_obj,'cat':cat})
     else:
          return redirect('userlogin')
@@ -101,22 +104,24 @@ def shopsingle(request):
         return render(request, 'shopsingle.html', {'mymembers4': details4})
     else:
         return render(request, 'userlogin.html')
+    
+class AdminLoginView(View):
+    def get(self, request):
+        if 'username' in request.session:
+            return redirect('admindashboard')
+        else:
+            return render(request, 'adminlogin.html')
 
-def adminlogin(request):
-    if 'username' in request.session:
-        return redirect('admindashboard')
-    else:    
-        if request.method=='POST':
-            username=request.POST.get('username')
-            password=request.POST.get('password')
-            user = User.objects.filter(username=username).first()
-            if user and user.check_password(password):
-                request.session['username']=username
-                return redirect('admindashboard')           
-            else:
-                return render (request, 'adminlogin.html')
-
-        return render(request, 'adminlogin.html')
+    def post(self, request):
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            request.session['username'] = username
+            return redirect('admindashboard')
+        else:
+            return render(request, 'adminlogin.html')
 
 def admindashboard(request):
     if 'username' in request.session:
@@ -143,14 +148,11 @@ def adminuserlist(request):
         if 'search' in request.GET:
             search=request.GET['search']
             member=UserDetail.objects.filter(uname__icontains=search)
-            paginator = Paginator(member, 2)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
         else:
             member=UserDetail.objects.all().order_by('-id')
-            paginator = Paginator(member, 2)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
+        paginator = Paginator(member, 2)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
         return render(request,'adminuserlist.html',{'page_obj': page_obj})
     else:
         return render(request, 'adminlogin.html')
@@ -161,51 +163,57 @@ def adminproductlist(request):
         if 'search' in request.GET:
             search=request.GET['search']
             member=Product.objects.filter(name__icontains=search)
-            paginator = Paginator(member, 2)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
         else:
             member=Product.objects.all().order_by('-id')
-            paginator = Paginator(member, 2)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
+        paginator = Paginator(member, 2)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
         return render(request,'adminproductlist.html',{'page_obj': page_obj})
     else:
         return render(request, 'adminlogin.html')
     
-    
-def adminaddproduct(request):
-    if 'username' in request.session:       
-        if request.method == 'POST':
-            fm = ProductForm(request.POST,request.FILES)
-            if fm.is_valid():
-                fm.save()
-                return redirect('adminproductlist')
-        
-        else:        
+class AdminAddProductView(View):
+    def get(self, request):
+        if 'username' in request.session:
             fm = ProductForm()
-            return render(request, 'adminaddproduct.html',{'fm':fm})
-    else:
-        return render(request, 'adminlogin.html')
+            return render(request, 'adminaddproduct.html', {'fm': fm})
+        else:
+            return redirect('adminlogin')
     
-def adminaddcategory(request):
-    if 'username' in request.session:       
-        if request.method == 'POST':
-            fm = CategoryForm(request.POST,request.FILES)
+    def post(self, request):
+        fm = ProductForm(request.POST, request.FILES)
+        if fm.is_valid():
+            fm.save()
+            return redirect('adminproductlist')
+        else:
+            return render(request, 'adminaddproduct.html', {'fm': fm})
+
+class AdminAddCategoryView(View):
+    def get(self, request):
+        if 'username' in request.session:
+            fm = CategoryForm()
+            return render(request, 'adminaddcategory.html', {'fm': fm})
+        else:
+            return render(request, 'adminlogin.html')
+
+    def post(self, request):
+        if 'username' in request.session:
+            fm = CategoryForm(request.POST, request.FILES)
             if fm.is_valid():
                 name = fm.cleaned_data['name']
                 dup = Category.objects.filter(name=name).first()
                 if dup:
-                    messages.warning(request,'Category already exists')
+                    messages.warning(request, 'Category already exists')
                     return redirect('adminaddcategory')
-                else: 
+                else:
                     fm.save()
-                    return redirect('admincategorylist')       
-        else:        
-            fm = CategoryForm()
-            return render(request, 'adminaddcategory.html',{'fm':fm})
-    else:
-        return render(request, 'adminlogin.html')
+                    return redirect('admincategorylist')
+            else:
+                fm = CategoryForm()
+                return render(request, 'adminaddcategory.html', {'fm': fm})
+        else:
+            return render(request, 'adminlogin.html')
+
 
 def updateproduct(request,id):
     if 'username' in request.session:
@@ -216,6 +224,8 @@ def updateproduct(request,id):
                 fm.save()
                 messages.success(request,"Product details updated")
                 return redirect('adminproductlist')
+            else:
+                return render(request, 'adminupdateproduct.html', {'fm': fm})
         else:
             fm = ProductForm(instance=prod)
             return render(request, 'adminupdateproduct.html', {'fm': fm})
@@ -257,14 +267,11 @@ def admincategorylist(request):
         if 'search' in request.GET:
             search=request.GET['search']
             member=Category.objects.filter(name__icontains=search)
-            paginator = Paginator(member, 2)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
         else:
             member=Category.objects.all().order_by('-id')
-            paginator = Paginator(member, 2)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
+        paginator = Paginator(member, 2)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
         return render(request,'admincategorylist.html',{'page_obj': page_obj})
     else:
         return render(request, 'adminlogin.html')
@@ -278,37 +285,44 @@ def deletecategory(request):
         return redirect('admincategorylist')
     else:
         return redirect('adminlogin')
-
-def updatecategory(request):
-    if 'username' in request.session:
-        uid = request.GET['uid']
-        cat = Category.objects.get(id=uid)
-        if request.method == 'POST':
+    
+class UpdateCategoryView(View):
+    def get(self, request):
+        if 'username' in request.session:
+            uid = request.GET['uid']
+            cat = Category.objects.get(id=uid)
+            fm = CategoryForm(instance=cat)
+            return render(request, 'adminupdatecategory.html', {'fm': fm})
+        else:
+            return redirect('adminlogin')
+    
+    def post(self, request):
+        if 'username' in request.session:
+            uid = request.GET['uid']
+            cat = Category.objects.get(id=uid)
             fm = CategoryForm(request.POST, request.FILES, instance=cat)
             if fm.is_valid():
                 fm.save()
                 return redirect('admincategorylist')
+            else:
+                return render(request, 'adminupdatecategory.html', {'fm': fm})
         else:
-            fm = CategoryForm(instance=cat)
-            return render(request, 'adminupdatecategory.html', {'fm': fm})
-    else:
-        return redirect('adminlogin')
-    
-    
-def userotplogin(request):
-    if request.method=='POST':
-        uname=request.POST.get('uname')
+            return redirect('adminlogin')    
+        
+class UserOTPLoginView(View):
+    def get(self, request):
+        return render(request, 'userotplogin.html')
+    def post(self, request):
+        uname = request.POST.get('uname')
         request.session['some_data'] = uname
         return redirect('otplogin')
-    return render(request, 'userotplogin.html')
-
     
 def otplogin(request):
     uname = request.session['some_data']
     try:
         obj = UserDetail.objects.get(uname=uname)
     except:
-        messages.warning("No user found")
+        messages.warning(request,"No user found")
         return redirect('userotplogin')
     if request.method=='POST':
         c_otp = int(request.POST.get('c_otp'))
@@ -322,7 +336,7 @@ def otplogin(request):
             return redirect('userotplogin')
     else:
         otp_sent = random.randint(1001, 9999)
-        # UserDetail.objects.filter(uname=uname).update(uotp=otp_sent) 
+        UserDetail.objects.filter(uname=uname).update(uotp=otp_sent) 
         # url = 'https://www.fast2sms.com/dev/bulkV2'
         # payload = f'sender_id=TXTIND&message={otp_sent}&route=v3&language=english&numbers={obj.uphone}'
         # headers = {
@@ -349,8 +363,8 @@ def checkout(request):
                     messages.success(request, 'new address added successfully')
                     return redirect('checkout') 
                 else:
-                    messages.warning(request,'Enter the address') 
-                    return redirect('checkout') 
+                    messages.warning(request,'Enter correct address') 
+                    return render(request, 'checkout.html', {'fm': fm})
             elif 'couponform' in request.POST:
                 check = request.POST.get('c_code')
                 uname=request.session['uname']
@@ -506,8 +520,6 @@ def paypal(request):
         use1 = UserDetail.objects.get(uname = user)
         use2 = Address.objects.get(user=use1,selected=True)
         cart = CartItem.objects.filter(cart__user__uname=use1)
-        # coupon = Coupon.objects.get(user=use1)
-        # cartcount = CartItem.objects.all().count()
         for c in cart:
             Order(user=use1, address=use2, product=c.product, amount=c.subtotal, ordertype= 'Paypal').save()
             c.delete()
@@ -606,31 +618,35 @@ def adminorderlist(request):
         if 'search' in request.GET:
             search=request.GET['search']
             member=Order.objects.filter(Q(user__uname__icontains=search)|Q(id__icontains=search)).order_by('-id')
-            paginator = Paginator(member, 2)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
         else:
             member = Order.objects.all().order_by('-id')
-            paginator = Paginator(member, 2)
-            page_number = request.GET.get('page')
-            page_obj = paginator.get_page(page_number)
+        paginator = Paginator(member, 2)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
         return render(request,'adminorderlist.html', {'page_obj': page_obj})
     else:
         return render('adminlogin')
+    
+class OrderUpdateView(View):
+    def get(self, request, id):
+        if 'username' in request.session:
+            ord = Order.objects.get(id=id)
+            fm = OrderForm(instance=ord)
+            return render(request, 'adminupdateorder.html', {'fm': fm})
+        else:
+            return redirect('adminlogin')
 
-def updateorder(request,id):
-    if 'username' in request.session:
-        ord = Order.objects.get(id=id)
-        if request.method == 'POST':
+    def post(self, request, id):
+        if 'username' in request.session:
+            ord = Order.objects.get(id=id)
             fm = OrderForm(request.POST, request.FILES, instance=ord)
             if fm.is_valid():
                 fm.save()
                 return redirect('adminorderlist')
+            else:
+                return render(request, 'adminupdateorder.html', {'fm': fm})
         else:
-            fm = OrderForm(instance=ord)
-            return render(request, 'adminupdateorder.html', {'fm': fm})
-    else:
-        return render('adminlogin')
+            return redirect('adminlogin')
 
 def userprofile(request):
     if 'uname' in request.session:       
@@ -640,45 +656,54 @@ def userprofile(request):
         return render(request, 'userprofile.html',{'profile':profile,'address':address})
     else:
         return redirect('userlogin')
+    
+class EditUserProfileView(View):
+    def get(self, request):
+        if 'uname' in request.session:
+            user = request.session['uname']
+            user = UserDetail.objects.get(uname=user)
+            return render(request, 'edituserprofile.html', {'user': user})
+        else:
+            return redirect('userlogin')
 
-def edituserprofile(request):
-    if 'uname' in request.session:   
-        user=request.session['uname']
-        user=UserDetail.objects.get(uname=user)
-        if request.method == 'POST':
-            uemail=request.POST.get('uemail')
-            uphone=request.POST.get('uphone')
-            UserDetail.objects.filter(uname=user.uname).update(uemail=uemail,uphone=uphone)
-            messages.success(request,'User details updated successfully')
+    def post(self, request):
+        if 'uname' in request.session:   
+            user = request.session['uname']
+            user = UserDetail.objects.get(uname=user)
+            uemail = request.POST.get('uemail')
+            uphone = request.POST.get('uphone')
+            UserDetail.objects.filter(uname=user.uname).update(uemail=uemail, uphone=uphone)
+            messages.success(request, 'User details updated successfully')
             return redirect('userprofile')
         else:
-            print("!!!Update not successfull")
-        return render(request, 'edituserprofile.html',{'user':user})
-    else:
-        return render('userlogin')
-
-def changepassword(request):
-    if 'uname' in request.session:   
-        user=request.session['uname']
-        user=UserDetail.objects.get(uname=user)
-        if request.method == 'POST':
-            password=request.POST.get('upassword')
-            pass1=request.POST.get('pass1')
-            pass2=request.POST.get('pass2')
-            if user.upassword==password:
-                if pass1==pass2:
-                    UserDetail.objects.filter(uname=user).update(upassword=pass1)
-                    messages.success(request,"Passwords changed successfully")
+            return redirect('userlogin')
+        
+class ChangePasswordView(View):
+    def get(self, request):
+        if 'uname' in request.session:   
+            return render(request,'changepassword.html')
+        else:
+            return redirect('userlogin')   
+    def post(self, request):
+        if 'uname' in request.session:
+            user = request.session['uname']
+            user = UserDetail.objects.get(uname=user)
+            password = request.POST.get('upassword')
+            pass1 = request.POST.get('pass1')
+            pass2 = request.POST.get('pass2')
+            if user.upassword == password:
+                if pass1 == pass2:
+                    user.upassword = pass1
+                    user.save()
+                    messages.success(request, "Passwords changed successfully")
                     return redirect('userprofile')
                 else:
-                    messages.warning(request,"Passwords not matching")
-                    return redirect('changepassword')
+                    messages.warning(request, "Passwords not matching")
             else:
-                messages.warning(request,"Incorrect password")
-                return redirect('changepassword')
-        return render(request,'changepassword.html')
-    else:
-        return render('userlogin')
+                messages.warning(request, "Incorrect password")
+            return redirect('changepassword')
+        else:
+            return redirect('userlogin')
 
 def updateprofileaddress(request,id):
     if 'uname' in request.session:
@@ -689,6 +714,8 @@ def updateprofileaddress(request,id):
                 fm.save()
                 messages.success(request,"Address updated successfully")
                 return redirect('userprofile')
+            else:
+                return render(request, 'updateprofileaddress.html', {'fm': fm})
         else:
             fm = UserAddressForm(instance=add)
             return render(request, 'updateprofileaddress.html', {'fm': fm})
@@ -708,8 +735,7 @@ def addprofileaddress(request):
                 messages.success(request, 'new address added successfully')
                 return redirect('userprofile') 
             else:
-                messages.warning(request,'Enter the address') 
-                return redirect('userprofile') 
+                return render(request, 'addprofileaddress.html', {'fm': fm})
         else:
             fm = UserAddressForm()
             return render(request, 'addprofileaddress.html', {'fm': fm})
@@ -747,42 +773,42 @@ def wishlistdelete(request,id):
         return redirect('userlogin')
 
 
-def sales_report(request):
-    if 'username' in request.session:
-        buf = io.BytesIO()
-        c = canvas.Canvas(buf,pagesize=letter, bottomup=1)
-        textob = c.beginText()
-        textob.setTextOrigin(inch, inch)
-        textob.setFont("Helvetica", 16)
-        if request.method == 'POST':    
-            start_date = request.POST.get('start_date')
-            end_date = request.POST.get('end_date')
-            orders = Order.objects.all()
-            if start_date and end_date:
-                start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-                end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-                orders = orders.order_by('-ordered_date').filter(ordered_date__range=[start_date, end_date])
-            else:
-                orders = Order.objects.all().order_by('-order_date')               
-            table_header = ["Customer Name", "Product Title", "Order Date and Time", "Order Status", "Payment Status"]            
-            table_data = []
-            for ord in orders:
-                row_data = [ord.address.user.uname, ord.product.name, str(ord.ordered_date), str(ord.status), str(ord.ordertype)]
-                table_data += [row_data]
-            pdfTable = Table([table_header] +table_data)           
-            pdfTableStyle = TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.lightblue)]) 
-            pdfTable.setStyle(pdfTableStyle)
-            pdfTable.wrapOn(c, 100, 100)
-            pdfTable.drawOn(c, 10, 10 + 5)
-            c.drawText(textob)
-            c.showPage()
-            c.save()
-            buf.seek(0)
-            return FileResponse(buf, as_attachment=True, filename="Sales report.pdf")
-        else:
-            return render(request,'sales_report.html')
-    else:
-        return redirect('userlogin')
+# def sales_report(request):
+#     if 'username' in request.session:
+#         buf = io.BytesIO()
+#         c = canvas.Canvas(buf,pagesize=letter, bottomup=1)
+#         textob = c.beginText()
+#         textob.setTextOrigin(inch, inch)
+#         textob.setFont("Helvetica", 16)
+#         if request.method == 'POST':    
+#             start_date = request.POST.get('start_date')
+#             end_date = request.POST.get('end_date')
+#             orders = Order.objects.all()
+#             if start_date and end_date:
+#                 start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+#                 end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+#                 orders = orders.order_by('-ordered_date').filter(ordered_date__range=[start_date, end_date])
+#             else:
+#                 orders = Order.objects.all().order_by('-order_date')               
+#             table_header = ["Customer Name", "Product Title", "Order Date and Time", "Order Status", "Payment Status"]            
+#             table_data = []
+#             for ord in orders:
+#                 row_data = [ord.address.user.uname, ord.product.name, str(ord.ordered_date), str(ord.status), str(ord.ordertype)]
+#                 table_data += [row_data]
+#             pdfTable = Table([table_header] +table_data)           
+#             pdfTableStyle = TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.lightblue)]) 
+#             pdfTable.setStyle(pdfTableStyle)
+#             pdfTable.wrapOn(c, 100, 100)
+#             pdfTable.drawOn(c, 10, 10 + 5)
+#             c.drawText(textob)
+#             c.showPage()
+#             c.save()
+#             buf.seek(0)
+#             return FileResponse(buf, as_attachment=True, filename="Sales report.pdf")
+#         else:
+#             return render(request,'sales_report.html')
+#     else:
+#         return redirect('userlogin')
     
 def cancelcoupon(request):
     uname = request.session['uname']
@@ -843,35 +869,6 @@ def updatecoupon(request):
             return render(request, 'adminupdatecoupon.html', {'fm': fm})
     else:
         return redirect('adminlogin')
-
-def generateinvoice(request):   
-    if 'uname' in request.session:
-        buf = io.BytesIO()
-        c = canvas.Canvas(buf,pagesize=letter, bottomup=1)
-        title = "Ricks - Invoice"
-        textob = c.beginText()
-        textob.setTextOrigin(inch, inch)
-        textob.setFont("Helvetica", 24)
-        textob.textLine(title)
-        ord_id = request.GET['ord_id']
-        orders = Order.objects.filter(id=ord_id)               
-        table_header = ["Date","User", "Address", "Product","Amount","Order Type"]            
-        table_data = []
-        for ord in orders:
-            row_data = [str(ord.ordered_date),ord.user.uname,ord.address.name,ord.product.name,ord.amount,ord.ordertype]
-            table_data += [row_data]
-        pdfTable = Table([table_header] +table_data)           
-        pdfTableStyle = TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.lightblue)]) 
-        pdfTable.setStyle(pdfTableStyle)
-        pdfTable.wrapOn(c, 100, 100)
-        pdfTable.drawOn(c, 10, 10 + 5)
-        c.drawText(textob)
-        c.showPage()
-        c.save()
-        buf.seek(0)
-        return FileResponse(buf, as_attachment=True, filename="Invoice.pdf")
-    else:
-        return redirect('userlogin')
     
 def adminbannerlist(request):
     if 'username' in request.session:
@@ -900,4 +897,83 @@ def updatebanner(request):
         return redirect('adminlogin')
 
 
+def handle_not_found(request,exception):
+    return render(request,'not-found.html')
+
+
+def generateinvoice(request):
+    user = UserDetail.objects.get(uname = request.session['uname'])
+
+    ordered_product = Order.objects.get(Q(id=request.GET.get('ord_id')) & Q(user=user))  
+    data = {
+        # 'date' : datetime.date.today(),
+        'orderid': ordered_product.id,
+        'ordered_date': ordered_product.ordered_date,
+        'name': ordered_product.address.name,
+        'housename': ordered_product.address.housename,
+        'locality' : ordered_product.address.locality,
+        'city' : ordered_product.address.city, 
+        'state' : ordered_product.address.state, 
+        'zipcode': ordered_product.address.zipcode,
+        'phone' : ordered_product.address.phone,
+        'product': ordered_product.product.name,
+        'amount' : ordered_product.amount,
+        'ordertype': ordered_product.ordertype,
+    } 
+    print("DATAAAA",data)
+    template_path = 'invoicepdf.html'
+    context = {
+        # 'date': data['date'],
+        'orderid': data['orderid'],
+        'name': data['name'],
+    }
+    html = render_to_string(template_path, data)
+    # Create a Django response object, and specify content_type as pdf
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="Invoice_{data["orderid"]}.pdf"'
+  
+
+    # create a pdf
+    pisa_status = pisa.CreatePDF(
+       html, dest=response)
+    # if error then show some funny view
+    if pisa_status.err:
+       return HttpResponse('We had some errors <pre>' + html + '</pre>')
+    return response
+
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+import requests
+from django.template.loader import get_template
+import openpyxl
+import pytz
+from datetime import datetime
+from django.db import models
+from django.db.models import Sum
+from io import BytesIO
+
+def sales_report(request):
+    if 'username' in request.session:
+        if request.method == 'POST':    
+            start_date = request.POST.get('start_date')
+            end_date = request.POST.get('end_date')
+            generate = request.POST.get('generate')
+            order = Order.objects.all()
+            print(generate)
+            print(start_date)
+            if end_date < start_date:
+                messages.warning(request, 'invalid date')
+                return redirect('admindashboard')
+
+            if generate == 'PDF':
+                if start_date and end_date:
+                    start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+                    total_ordered_products = Order.objects.filter(ordered_date__range=[start_date, end_date])
+                return redirect('admindashboard')
+
+        else:
+            return render(request,'sales_report.html')
+    else:
+        return redirect('userlogin')
 
